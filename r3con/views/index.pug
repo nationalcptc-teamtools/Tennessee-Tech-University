@@ -1,0 +1,122 @@
+doctype html
+html(data-bs-theme='dark')
+  head
+    include head
+  body
+    header
+      include navbar
+    input#fileInput(type='file' accept='.xml, .zip')
+    br
+    p Upload scan results here (XML or ZIP containing XMLs)
+    button#uploadButton.btn.btn-primary Import
+
+    #mynetwork
+
+    script(src='https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.3/js/bootstrap.bundle.min.js')
+    script.
+      let network;
+      const nodes = new vis.DataSet();
+      const edges = new vis.DataSet();
+      function initializeNetwork() {
+        const container = document.getElementById('mynetwork');
+        const data = {
+          nodes: nodes,
+          edges: edges
+        };
+        const options = {
+          nodes: {
+            shape: 'dot',
+            size: 25,
+          },
+          physics: {
+            enabled: true,
+            barnesHut: {
+              gravitationalConstant: -2000,
+              centralGravity: 0.3,
+              springLength: 95,
+              springConstant: 0.04,
+              damping: 0.09,
+              avoidOverlap: 0
+            }
+          }
+        };
+        network = new vis.Network(container, data, options);
+      }
+
+      function addToNetwork(xmlDoc) {
+        const hosts = xmlDoc.getElementsByTagName('host');
+        for (let i = 0; i < hosts.length; i++) {
+          const randomColor = Math.floor(Math.random()*16777215).toString(16);
+          const address = hosts[i].getElementsByTagName('address')[0].getAttribute('addr');
+          console.log(randomColor);
+          if (!nodes.get(address)) {
+            nodes.add({shape: 'image', id: address, label: address, color: `#${randomColor}`, image: '/images/server.png', font: {color: 'white'}});
+          }
+          const ports = hosts[i].getElementsByTagName('port');
+          for (let j = 0; j < ports.length; j++) {
+            const port = ports[j].getAttribute('portid');
+            const service = ports[j].getElementsByTagName('service')[0];
+            if (service) {
+              const serviceName = service.getAttribute('name');
+              const nodeId = `${address}:${port}`;
+              if (!nodes.get(nodeId)) {
+                nodes.add({id: nodeId, label: `${port}/${serviceName}`, color: `#${randomColor}`, font: {color: 'white'}});
+              }
+              const edgeId = `${address}-${nodeId}`;
+              if (!edges.get(edgeId)) {
+                edges.add({id: edgeId, from: address, to: nodeId});
+              }
+            }
+          }
+        }
+      }
+      initializeNetwork();
+      var scanCount = 0;
+      fetch('/nmap_count')
+        .then(response => response.json())
+        .then(data => {
+          scanCount = data.count;
+          for (let i = 0; i < scanCount; i++) {
+          fetch(`/nmap_scan/${i}`)
+            .then(response => response.json())
+            .then(data => {
+              const xmlContent = atob(data.nmap_scan);
+              const parser = new DOMParser();
+              const xmlDoc = parser.parseFromString(xmlContent, "text/xml");
+              addToNetwork(xmlDoc);
+            });
+          }
+        });
+
+      document.getElementById('uploadButton').addEventListener('click', () => {
+        const fileInput = document.getElementById('fileInput');
+        const file = fileInput.files[0];
+
+        if (!file) {
+          return;
+        }
+
+        const reader = new FileReader();
+
+        reader.onloadend = () => {
+          const base64data = reader.result.split(',')[1];
+          fetch('/nmap_upload', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              nmap_scan: base64data
+            })
+          })
+            .then(response => response.json())
+            .then(data => {
+              if (data.success) {
+                location.reload();
+              }
+            });
+        };
+
+        reader.readAsDataURL(file);
+      });
+

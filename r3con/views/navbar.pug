@@ -1,0 +1,30 @@
+nav.navbar.navbar-expand-lg.navbar-dark.bg-dark
+  script.
+    document.addEventListener('DOMContentLoaded', function() {
+      var baseUrl = window.location.href.split('/')[2].split(':')[0];
+      baseUrl = 'http://' + baseUrl + ':8000';
+      const files = document.getElementById('files');
+      files.href = baseUrl;
+    });
+  .container
+    a.navbar-brand(href='/') R3CON
+    button.navbar-toggler(type='button' data-bs-toggle='collapse' data-bs-target='#navbarNav' aria-controls='navbarNav' aria-expanded='false' aria-label='Toggle navigation')
+      span.navbar-toggler-icon
+    #navbarNav.collapse.navbar-collapse
+      ul.navbar-nav.me-auto
+        li.nav-item
+          a.nav-link(href='/' class=currentPage === '' ? 'active' : '') Graph
+        li.nav-item
+          a.nav-link(href='/hosts' class=currentPage === 'hosts' ? 'active' : '') Hosts
+        li.nav-item
+          a.nav-link(href='/services' class=currentPage === 'services' ? 'active' : '') Services
+        li.nav-item
+          a.nav-link(href='/credentials' class=currentPage === 'credentials' ? 'active' : '') Credentials
+        li.nav-item
+          a.nav-link(id='files') Files
+      ul.navbar-nav
+        li.nav-item
+          a.nav-link(href='/export_db')
+            i.fas.fa-download
+            | Export DB
+              

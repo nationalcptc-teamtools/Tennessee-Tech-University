@@ -1,0 +1,475 @@
+doctype html
+html(data-bs-theme='dark')
+  head
+    include head
+  body
+    header
+      include navbar
+
+    .container.mt-3
+      .d-flex.justify-content-center.mb-3
+        canvas#progressBar(width='300' height='200')
+      
+      .d-flex.justify-content-left.mb-3
+        button.btn.btn-primary(type='button' data-bs-toggle='collapse' data-bs-target='#filterButtons' aria-expanded='false' aria-controls='filterButtons' style='margin-right: 5px; margin-bottom: 5px;')
+          | Filter Options
+          i.fas.fa-chevron-down.ms-2
+        #filterButtons.collapse
+          .btn-group-vertical(role='group' aria-label='Filter options')
+            button.btn.btn-outline-primary(onclick='window.location.href="/hosts"') All
+            button.btn.btn-outline-primary(onclick='window.location.href="/hosts?tags="') Unowned (TODO - Fix this)
+            button.btn.btn-outline-primary(onclick='window.location.href="/hosts?tags=compromised"') Compromised
+            button.btn.btn-outline-primary(onclick='window.location.href="/hosts?tags=pwned"') Pwned
+            button.btn.btn-outline-primary(onclick='filterHosts()') Advanced
+
+      .row.row-cols-1.row-cols-md-2.row-cols-lg-3.row-cols-xl-4.g-4
+        for host in hosts
+          .col
+            if host.tags
+              - var cardStyle = host.tags.includes('pwned') ? 'background-color: rgba(255, 99, 132, 0.6);' : (host.tags.includes('compromised') ? 'background-color: rgba(255, 206, 86, 0.6);' : '')
+            else
+              - var cardStyle = ''
+            
+            .card.h-100
+              .card-body(style=cardStyle)
+                if typeof host.hostname === 'string'
+                  h5.card-title= host.hostname
+                  h6.card-subtitle.mb-2.text-muted= host.address
+                else
+                  h5.card-title= host.address
+                  h6.card-subtitle.mb-2.text-muted= host.hostname || 'Unknown Hostname'
+                    i.fas.fa-edit.ms-2(style='cursor: pointer;', onclick=`updateHostname('${host.id}')`)
+                h6.card-subtitle.mb-2.text-muted= host.os || 'Unknown OS'
+                  i.fas.fa-edit.ms-2(style='cursor: pointer;', onclick=`updateOS('${host.id}')`)
+                h6.card-subtitle.mb-2.text-muted= host.claimer || 'Unclaimed'
+                  i.fas.fa-edit.ms-2(style='cursor: pointer;', onclick=`updateClaimer('${host.id}')`)
+                p.card-text
+                  each tag in host.tags
+                    span.badge.bg-secondary.me-1= tag
+                p.card-text
+                  each port in host.services
+                    span.badge.bg-primary.me-1(data-bs-toggle='tooltip' data-bs-placement='top' title=`${port.version}`)= port.name + ' ' + port.port + '/' + port.protocol
+              .card-footer
+                a.btn.btn-sm.btn-primary(onclick=`viewNotes('${host.id}')` style='margin-right: 5px; margin-bottom: 5px;') View Notes
+                a.btn.btn-sm.btn-primary(onclick=`viewDetails('${host.id}')` style='margin-right: 5px; margin-bottom: 5px;') View Details
+                a.btn.btn-sm.btn-secondary(onclick=`addTag('${host.id}')` style='margin-right: 5px; margin-bottom: 5px;') Add Tag
+                a.btn.btn-sm.btn-danger(onclick=`deleteTag('${host.id}')` style='margin-right: 5px; margin-bottom: 5px;') Delete Tag
+
+    include scripts
+    script.
+
+      function viewDetails(id) {
+        fetch(`/hosts/${id}`)
+          .then(response => response.json())
+          .then(data => {
+            const host = data.host;
+            let services = '';
+            for (let service of host.services) {
+              services += `${service.name} ${service.port}/${service.protocol} (${service.version})<br>`;
+            }
+            Swal.fire({
+              title: 'Host Details',
+              width: 800,
+              html: `
+              <table class="table table-striped">
+                <thead>
+                  <tr>
+                    <th>Hostname</th>
+                    <th>Address</th>
+                    <th>OS</th>
+                    <th>Claimer</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>${host.hostname || 'Unknown'}</td>
+                    <td>${host.address}</td>
+                    <td>${host.os || 'Unknown'}</td>
+                    <td>${host.claimer || 'Unclaimed'}</td>
+                  </tr>
+                </tbody>
+              </table>
+              <br>
+              <table class="table table-striped">
+                <thead>
+                  <tr>
+                    <th>Service</th>
+                    <th>Port</th>
+                    <th>Protocol</th>
+                    <th>Version</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${host.services.map(service => `<tr><td>${service.name}</td><td>${service.port}</td><td>${service.protocol}</td><td>${service.version}</td></tr>`).join('')}
+                </tbody>
+              </table>
+              <div class="text-start">
+                <h5>Tags</h5>
+                <p>${host.tags.join(', ')}</p>
+                <br>
+                <h5>Nmap Script Output</h5>
+                <pre>${host.scripts.map(script => script.output).join('<br>============================================<br>')}</pre>
+              </div>
+              `,
+              showCancelButton: true,
+              confirmButtonText: 'Close'
+            });
+          });
+      }
+
+
+      function viewCredentials(id) {
+        fetch(`/credentials/${id}`)
+          .then(response => response.json())
+          .then(data => {
+            let credentials = '';
+            for (let credential of data) {
+              credentials += `${credential.username}:${credential.password}\n`;
+            }
+            Swal.fire({
+              title: 'Credentials',
+              html: `<table class="table table-striped"><thead><tr><th></th><th>Username</th><th>Password</th></tr></thead><tbody>${data.map(credential => `<tr><td>${credential.service}</td><td>${credential.username}</td><td>${credential.password}</td></tr>`).join('')}</tbody></table>`,
+              confirmButtonText: 'Close'
+            });
+          });
+      }
+
+      function submitCredential(id) {
+        Swal.fire({
+          title: 'Add Credential',
+          html: '<input id="service" class="swal2-input" placeholder="Service" type="text" required><input id="username" class="swal2-input" placeholder="Username" type="text" required><input id="password" class="swal2-input" placeholder="Password" type="password" required>',
+          showCancelButton: true,
+          confirmButtonText: 'Add',
+          showLoaderOnConfirm: true,
+          preConfirm: () => {
+            const service = document.getElementById('service').value;
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            return fetch(`/credentials/${id}`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({ service, username, password })
+            }).then(response => {
+              if (!response.ok) {
+                return response.json().then(errorData => {
+                  throw new Error(errorData.error || response.statusText);
+                });
+              }
+              return response.json();
+            }).catch(error => {
+              Swal.showValidationMessage(`Request failed: ${error.message}`);
+            });
+          },
+          allowOutsideClick: () => !Swal.isLoading()
+        }).then((result) => {
+          if (result.isConfirmed) {
+            window.location.reload();
+          }
+        });
+      }
+
+      function addTag(id) {
+        Swal.fire({
+          title: 'Add Tag',
+          input: 'text',
+          inputAttributes: {
+            autocapitalize: 'off'
+          },
+          showCancelButton: true,
+          confirmButtonText: 'Add',
+          showLoaderOnConfirm: true,
+          preConfirm: (tag) => {
+            return fetch(`/hosts/${id}/tag`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({ tag })
+            }).then(response => {
+              if (!response.ok) {
+                return response.json().then(errorData => {
+                  throw new Error(errorData.error || response.statusText);
+                });
+              }
+              return response.json();
+            }).catch(error => {
+              Swal.showValidationMessage(`Request failed: ${error.message}`);
+            });
+          },
+          allowOutsideClick: () => !Swal.isLoading()
+        }).then((result) => {
+          if (result.isConfirmed) {
+            window.location.reload();
+          }
+        });
+      }
+
+      function deleteTag(id) {
+        Swal.fire({
+          title: 'Delete Tag',
+          input: 'text',
+          inputAttributes: {
+            autocapitalize: 'off'
+          },
+          showCancelButton: true,
+          confirmButtonText: 'Delete',
+          showLoaderOnConfirm: true,
+          preConfirm: (tag) => {
+            return fetch(`/hosts/${id}/tag`, {
+              method: 'DELETE',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({ tag })
+            }).then(response => {
+              if (!response.ok) {
+                return response.json().then(errorData => {
+                  throw new Error(errorData.error || response.statusText);
+                });
+              }
+              return response.json();
+            }).catch(error => {
+              Swal.showValidationMessage(`Request failed: ${error.message}`);
+            });
+          },
+          allowOutsideClick: () => !Swal.isLoading()
+        }).then((result) => {
+          if (result.isConfirmed) {
+            window.location.reload();
+          }
+        });
+      }
+
+      function updateHostname(id) {
+        Swal.fire({
+          title: 'Update Hostname',
+          input: 'text',
+          inputAttributes: {
+            autocapitalize: 'off'
+          },
+          showCancelButton: true,
+          confirmButtonText: 'Update',
+          showLoaderOnConfirm: true,
+          preConfirm: (hostname) => {
+            return fetch(`/hosts/${id}/hostname`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({ hostname })
+            }).then(response => {
+              if (!response.ok) {
+                return response.json().then(errorData => {
+                  throw new Error(errorData.error || response.statusText);
+                });
+              }
+              return response.json();
+            }).catch(error => {
+              Swal.showValidationMessage(`Request failed: ${error.message}`);
+            });
+          },
+          allowOutsideClick: () => !Swal.isLoading()
+        }).then((result) => {
+          if (result.isConfirmed) {
+            window.location.reload();
+          }
+        });
+      }
+
+      function updateOS(id) {
+        Swal.fire({
+          title: 'Update OS',
+          input: 'text',
+          inputAttributes: {
+            autocapitalize: 'off'
+          },
+          showCancelButton: true,
+          confirmButtonText: 'Update',
+          showLoaderOnConfirm: true,
+          preConfirm: (os) => {
+            return fetch(`/hosts/${id}/os`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({ os })
+            }).then(response => {
+              if (!response.ok) {
+                return response.json().then(errorData => {
+                  throw new Error(errorData.error || response.statusText);
+                });
+              }
+              return response.json();
+            }).catch(error => {
+              Swal.showValidationMessage(`Request failed: ${error.message}`);
+            });
+          },
+          allowOutsideClick: () => !Swal.isLoading()
+        }).then((result) => {
+          if (result.isConfirmed) {
+            window.location.reload();
+          }
+        });
+      }
+
+      function viewNotes(id) {
+        fetch(`/notes/${id}`)
+          .then(response => response.json())
+          .then(data => {
+            if (!data.notes) {
+              data.notes = '';
+            }
+            const markedNotes = marked.parse(data.notes);
+            Swal.fire({
+              title: 'Notes',
+              width: 800,
+              html: `<div class="text-start">${markedNotes}</div><br><textarea id="notes" class="form-control" rows="10" cols="10">${data.notes}</textarea>`,
+              showCancelButton: true,
+              confirmButtonText: 'Update',
+              showLoaderOnConfirm: true,
+              preConfirm: () => {
+                const notes = document.getElementById('notes').value;
+                return fetch(`/notes/${id}`, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json'
+                  },
+                  body: JSON.stringify({ notes })
+                }).then(response => {
+                  if (!response.ok) {
+                    return response.json().then(errorData => {
+                      throw new Error(errorData.error || response.statusText);
+                    });
+                  }
+                  return response.json();
+                }).catch(error => {
+                  Swal.showValidationMessage(`Request failed: ${error.message}`);
+                });
+              },
+              allowOutsideClick: () => !Swal.isLoading()
+            }).then((result) => {
+              if (result.isConfirmed) {
+                window.location.reload();
+              }
+            });
+          });
+      }
+
+      function filterHosts() {
+        Swal.fire({
+          title: 'Advanced Filter',
+          width: 800,
+          html: `
+            <input id="os" class="swal2-input" placeholder="OS (eg: 'windows', 'windows,linux', etc.)" type="text" required>
+            <input id="port" class="swal2-input" placeholder="Port (eg: '22', '80,443,3389', etc. )" type="text" required>
+            <input id="claimer" class="swal2-input" placeholder="Claimed By (eg: 'landon', 'unclaimed', etc...)" type="text" required>
+            <input id="tags" class="swal2-input" placeholder="Tags (eg: 'pwned', 'compromised', 'ad,rdp', etc...)" type="text" required>
+            <input id="subnet" class="swal2-input" placeholder="Subnet (eg: '10.0.0.0/24')" type="text" required>
+          `,
+          showCancelButton: true,
+          confirmButtonText: 'Filter',
+          showLoaderOnConfirm: true,
+          preConfirm: () => {
+            const os = document.getElementById('os').value || '';
+            const port = document.getElementById('port').value || '';
+            const tags = document.getElementById('tags').value || '';
+            const claimer = document.getElementById('claimer').value || '';
+            const subnet = document.getElementById('subnet').value || '';
+            window.location.href = `/hosts?os=${os}&port=${port}&tags=${tags}&claimer=${claimer}&subnet=${subnet}`;
+          },
+          allowOutsideClick: () => !Swal.isLoading()
+        });
+      }
+
+      function updateClaimer(id) {
+        Swal.fire({
+          title: 'Update Claimer',
+          input: 'text',
+          inputAttributes: {
+            autocapitalize: 'off'
+          },
+          showCancelButton: true,
+          confirmButtonText: 'Update',
+          showLoaderOnConfirm: true,
+          preConfirm: (claimer) => {
+            return fetch(`/hosts/${id}/claim`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({ claimer })
+            }).then(response => {
+              if (!response.ok) {
+                return response.json().then(errorData => {
+                  throw new Error(errorData.error || response.statusText);
+                });
+              }
+              return response.json();
+            }).catch(error => {
+              Swal.showValidationMessage(`Request failed: ${error.message}`);
+            });
+          },
+          allowOutsideClick: () => !Swal.isLoading()
+        }).then((result) => {
+          if (result.isConfirmed) {
+            window.location.reload();
+          }
+        });
+      }
+    
+    script.
+      const ctx = document.getElementById('progressBar').getContext('2d');
+      const progressBar = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: ['Progress'],
+          datasets: [
+            {
+              label: 'Unowned',
+              data: [!{totalHostCount - (compromisedHostCount + pwnedHostCount)}],
+              backgroundColor: 'rgba(54, 162, 235, 0.6)',
+              borderColor: 'rgba(54, 162, 235, 1)',
+              borderWidth: 1
+            },
+            {
+              label: 'Compromised',
+              data: [!{compromisedHostCount}],
+              backgroundColor: 'rgba(255, 206, 86, 0.6)',
+              borderColor: 'rgba(255, 206, 86, 1)',
+              borderWidth: 1
+            },
+            {
+              label: 'Pwned',
+              data: [!{pwnedHostCount}],
+              backgroundColor: 'rgba(255, 99, 132, 0.6)',
+              borderColor: 'rgba(255, 99, 132, 1)',
+              borderWidth: 1
+            }
+          ]
+        },
+        options: {
+          indexAxis: 'y',
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            x: {
+              stacked: true,
+              beginAtZero: true,
+              ticks: {
+                precision: 0
+              }
+            },
+            y: {
+              stacked: true
+            }
+          },
+          plugins: {
+            legend: {
+              display: true,
+              position: 'bottom'
+            }
+          }
+        }
+      });
