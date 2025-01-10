@@ -7,17 +7,29 @@ html(data-bs-theme='dark')
       include navbar
     input#fileInput(type='file' accept='.xml, .zip')
     br
-    p Upload scan results here (XML or ZIP containing XMLs)
+    span Upload scan results here (XML or ZIP containing XMLs)
+    br
+    label(for='showGraph') Show Graph
+    input#showGraph(type='checkbox')
+    br
     button#uploadButton.btn.btn-primary Import
 
-    #mynetwork
+    #mynetwork(style='display: none;')
 
     script(src='https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.3/js/bootstrap.bundle.min.js')
     script.
       let network;
-      const nodes = new vis.DataSet();
-      const edges = new vis.DataSet();
+      let nodes;
+      let edges;
+      let isNetworkInitialized = false;
+      let cachedXmlDocs = [];
+
       function initializeNetwork() {
+        if (!nodes) {
+          nodes = new vis.DataSet();
+          edges = new vis.DataSet();
+        }
+        
         const container = document.getElementById('mynetwork');
         const data = {
           nodes: nodes,
@@ -41,17 +53,31 @@ html(data-bs-theme='dark')
           }
         };
         network = new vis.Network(container, data, options);
+        isNetworkInitialized = true;
       }
 
       function addToNetwork(xmlDoc) {
+        // Cache the XML doc for later use if needed
+        cachedXmlDocs.push(xmlDoc);
+        
+        if (!isNetworkInitialized) return;
+
         const hosts = xmlDoc.getElementsByTagName('host');
         for (let i = 0; i < hosts.length; i++) {
           const randomColor = Math.floor(Math.random()*16777215).toString(16);
           const address = hosts[i].getElementsByTagName('address')[0].getAttribute('addr');
-          console.log(randomColor);
+          
           if (!nodes.get(address)) {
-            nodes.add({shape: 'image', id: address, label: address, color: `#${randomColor}`, image: '/images/server.png', font: {color: 'white'}});
+            nodes.add({
+              shape: 'image', 
+              id: address, 
+              label: address, 
+              color: `#${randomColor}`, 
+              image: '/images/server.png', 
+              font: {color: 'white'}
+            });
           }
+          
           const ports = hosts[i].getElementsByTagName('port');
           for (let j = 0; j < ports.length; j++) {
             const port = ports[j].getAttribute('portid');
@@ -60,7 +86,12 @@ html(data-bs-theme='dark')
               const serviceName = service.getAttribute('name');
               const nodeId = `${address}:${port}`;
               if (!nodes.get(nodeId)) {
-                nodes.add({id: nodeId, label: `${port}/${serviceName}`, color: `#${randomColor}`, font: {color: 'white'}});
+                nodes.add({
+                  id: nodeId, 
+                  label: `${port}/${serviceName}`, 
+                  color: `#${randomColor}`, 
+                  font: {color: 'white'}
+                });
               }
               const edgeId = `${address}-${nodeId}`;
               if (!edges.get(edgeId)) {
@@ -70,21 +101,36 @@ html(data-bs-theme='dark')
           }
         }
       }
-      initializeNetwork();
+
+      document.getElementById('showGraph').addEventListener('change', (e) => {
+        const mynetwork = document.getElementById('mynetwork');
+        if (e.target.checked) {
+          mynetwork.style.display = 'block';
+          if (!isNetworkInitialized) {
+            initializeNetwork();
+            // Process any cached XML docs
+            cachedXmlDocs.forEach(xmlDoc => addToNetwork(xmlDoc));
+          }
+        } else {
+          mynetwork.style.display = 'none';
+        }
+      });
+
+      // Fetch existing scans
       var scanCount = 0;
       fetch('/nmap_count')
         .then(response => response.json())
         .then(data => {
           scanCount = data.count;
           for (let i = 0; i < scanCount; i++) {
-          fetch(`/nmap_scan/${i}`)
-            .then(response => response.json())
-            .then(data => {
-              const xmlContent = atob(data.nmap_scan);
-              const parser = new DOMParser();
-              const xmlDoc = parser.parseFromString(xmlContent, "text/xml");
-              addToNetwork(xmlDoc);
-            });
+            fetch(`/nmap_scan/${i}`)
+              .then(response => response.json())
+              .then(data => {
+                const xmlContent = atob(data.nmap_scan);
+                const parser = new DOMParser();
+                const xmlDoc = parser.parseFromString(xmlContent, "text/xml");
+                addToNetwork(xmlDoc);
+              });
           }
         });
 
@@ -119,4 +165,3 @@ html(data-bs-theme='dark')
 
         reader.readAsDataURL(file);
       });
-

@@ -95,11 +95,16 @@ function importXMLToDatabase(xmlString) {
       }
 
       // Get services for the host
-      const services = host.ports[0].port;
+      const services = host.ports[0].port || [];
       console.log(services);
       for (const service of services) {
         const port = service.$.portid;
         const protocol = service.$.protocol;
+        const open = service.state[0].$.state == 'open';
+        if (!open) {
+          // Skip closed ports
+          continue;
+        }
 
         // Get service name if it exists
         let name = 'unknown';

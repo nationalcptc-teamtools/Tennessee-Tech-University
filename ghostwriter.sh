@@ -15,4 +15,5 @@ cd Ghostwriter
 sudo ./ghostwriter-cli-linux install | tee install.txt
 sudo ./ghostwriter-cli-linux config set date_format "F j, Y"
 sudo ./ghostwriter-cli-linux config allowhost "*"
+sudo ./ghostwriter-cli-linux containers down
 sudo ./ghostwriter-cli-linux containers up
