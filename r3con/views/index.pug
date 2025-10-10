@@ -5,140 +5,26 @@ html(data-bs-theme='dark')
   body
     header
       include navbar
-    input#fileInput(type='file' accept='.xml, .zip')
-    br
-    span Upload scan results here (XML or ZIP containing XMLs)
-    br
-    label(for='showGraph') Show Graph
-    input#showGraph(type='checkbox')
-    br
-    button#uploadButton.btn.btn-primary Import
 
-    #mynetwork(style='display: none;')
+    .center-vertically
+      .container
+        .row.justify-content-center
+          .col-lg-8
+            .card.upload-card.shadow-lg.p-4.bg-dark.text-light.border-danger
+              h2.text-center.mb-4 Upload Nmap Scan
+              input#fileInput.form-control.mb-3(type='file' accept='.xml, .zip')
+              span.text-center.mb-2.d-block Upload scan results here (XML or ZIP containing XMLs)
+              button#uploadButton.btn.btn-modern.bg-danger.w-100(type='button') Upload
+
 
     script(src='https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.3/js/bootstrap.bundle.min.js')
     script.
-      let network;
-      let nodes;
-      let edges;
-      let isNetworkInitialized = false;
-      let cachedXmlDocs = [];
-
-      function initializeNetwork() {
-        if (!nodes) {
-          nodes = new vis.DataSet();
-          edges = new vis.DataSet();
-        }
-        
-        const container = document.getElementById('mynetwork');
-        const data = {
-          nodes: nodes,
-          edges: edges
-        };
-        const options = {
-          nodes: {
-            shape: 'dot',
-            size: 25,
-          },
-          physics: {
-            enabled: true,
-            barnesHut: {
-              gravitationalConstant: -2000,
-              centralGravity: 0.3,
-              springLength: 95,
-              springConstant: 0.04,
-              damping: 0.09,
-              avoidOverlap: 0
-            }
-          }
-        };
-        network = new vis.Network(container, data, options);
-        isNetworkInitialized = true;
-      }
-
-      function addToNetwork(xmlDoc) {
-        // Cache the XML doc for later use if needed
-        cachedXmlDocs.push(xmlDoc);
-        
-        if (!isNetworkInitialized) return;
-
-        const hosts = xmlDoc.getElementsByTagName('host');
-        for (let i = 0; i < hosts.length; i++) {
-          const randomColor = Math.floor(Math.random()*16777215).toString(16);
-          const address = hosts[i].getElementsByTagName('address')[0].getAttribute('addr');
-          
-          if (!nodes.get(address)) {
-            nodes.add({
-              shape: 'image', 
-              id: address, 
-              label: address, 
-              color: `#${randomColor}`, 
-              image: '/images/server.png', 
-              font: {color: 'white'}
-            });
-          }
-          
-          const ports = hosts[i].getElementsByTagName('port');
-          for (let j = 0; j < ports.length; j++) {
-            const port = ports[j].getAttribute('portid');
-            const service = ports[j].getElementsByTagName('service')[0];
-            if (service) {
-              const serviceName = service.getAttribute('name');
-              const nodeId = `${address}:${port}`;
-              if (!nodes.get(nodeId)) {
-                nodes.add({
-                  id: nodeId, 
-                  label: `${port}/${serviceName}`, 
-                  color: `#${randomColor}`, 
-                  font: {color: 'white'}
-                });
-              }
-              const edgeId = `${address}-${nodeId}`;
-              if (!edges.get(edgeId)) {
-                edges.add({id: edgeId, from: address, to: nodeId});
-              }
-            }
-          }
-        }
-      }
-
-      document.getElementById('showGraph').addEventListener('change', (e) => {
-        const mynetwork = document.getElementById('mynetwork');
-        if (e.target.checked) {
-          mynetwork.style.display = 'block';
-          if (!isNetworkInitialized) {
-            initializeNetwork();
-            // Process any cached XML docs
-            cachedXmlDocs.forEach(xmlDoc => addToNetwork(xmlDoc));
-          }
-        } else {
-          mynetwork.style.display = 'none';
-        }
-      });
-
-      // Fetch existing scans
-      var scanCount = 0;
-      fetch('/nmap_count')
-        .then(response => response.json())
-        .then(data => {
-          scanCount = data.count;
-          for (let i = 0; i < scanCount; i++) {
-            fetch(`/nmap_scan/${i}`)
-              .then(response => response.json())
-              .then(data => {
-                const xmlContent = atob(data.nmap_scan);
-                const parser = new DOMParser();
-                const xmlDoc = parser.parseFromString(xmlContent, "text/xml");
-                addToNetwork(xmlDoc);
-              });
-          }
-        });
-
       document.getElementById('uploadButton').addEventListener('click', () => {
         const fileInput = document.getElementById('fileInput');
         const file = fileInput.files[0];
 
         if (!file) {
+          alert('Please select a file to upload.');
           return;
         }
 
@@ -159,6 +45,8 @@ html(data-bs-theme='dark')
             .then(data => {
               if (data.success) {
                 location.reload();
+              } else {
+                alert('Upload failed.');
               }
             });
         };

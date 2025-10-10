@@ -88,15 +88,55 @@ function importXMLToDatabase(xmlString) {
     const hosts = result.nmaprun.host;
     for (const host of hosts) {
       const address = host.address[0].$.addr;
+      // Extract hostname (if present)
+      let hostname = null;
+      if (host.hostnames && host.hostnames[0] && host.hostnames[0].hostname && host.hostnames[0].hostname[0] && host.hostnames[0].hostname[0].$.name) {
+        hostname = host.hostnames[0].hostname[0].$.name;
+      }
+      // Extract OS (if present)
+      let os = null;
+      if (host.os && host.os[0] && host.os[0].osmatch && host.os[0].osmatch[0] && host.os[0].osmatch[0].$.name) {
+        os = host.os[0].osmatch[0].$.name;
+      } else {
+        // Try to get OS from service ostype (e.g., SSH, etc.)
+        if (host.ports && host.ports[0] && host.ports[0].port) {
+          for (const portObj of host.ports[0].port) {
+            if (portObj.service && portObj.service[0] && portObj.service[0].$.ostype) {
+              os = portObj.service[0].$.ostype;
+              break;
+            }
+          }
+        }
+      }
       const existingHost = db.prepare('SELECT * FROM HOSTS WHERE address = ?').get(address);
       if (!existingHost) {
-        db.prepare('INSERT INTO HOSTS (address) VALUES (?)').run(address);
-        console.log(`Inserted host ${address}`);
+        db.prepare('INSERT INTO HOSTS (address, hostname, os) VALUES (?, ?, ?)').run(address, hostname, os);
+        console.log(`Inserted host ${address} (hostname: ${hostname}, os: ${os})`);
+      } else {
+        // Update hostname and os if new info is available
+        let updateNeeded = false;
+        let updateFields = [];
+        let updateValues = [];
+        if (hostname && (!existingHost.hostname || existingHost.hostname !== hostname)) {
+          updateFields.push('hostname = ?');
+          updateValues.push(hostname);
+          updateNeeded = true;
+        }
+        if (os && (!existingHost.os || existingHost.os !== os)) {
+          updateFields.push('os = ?');
+          updateValues.push(os);
+          updateNeeded = true;
+        }
+        if (updateNeeded) {
+          updateValues.push(address);
+          db.prepare(`UPDATE HOSTS SET ${updateFields.join(', ')} WHERE address = ?`).run(...updateValues);
+          console.log(`Updated host ${address} (hostname: ${hostname}, os: ${os})`);
+        }
       }
 
       // Get services for the host
-      const services = host.ports[0].port || [];
-      console.log(services);
+      const services = host.ports && host.ports[0] && host.ports[0].port ? host.ports[0].port : [];
+      // ...existing code...
       for (const service of services) {
         const port = service.$.portid;
         const protocol = service.$.protocol;

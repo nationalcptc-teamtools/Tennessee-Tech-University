@@ -1,8 +1,79 @@
+
 body {
-  padding: 50px;
+  min-height: 100vh;
   font: 14px "Lucida Grande", Helvetica, Arial, sans-serif;
+  background: url('/images/cat.jpg') center center/cover no-repeat; /* linear-gradient(135deg, #232526 0%, #414345 100%);*/
+  /* fallback color if image fails */
+  background-blend-mode: normal;
+  background-attachment: fixed;
+  overflow: auto;
+  margin: 0;
+}
+
+.center-vertically {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top:  -40px;
 }
 
 a {
   color: #00B7FF;
+}
+
+.card.upload-card {
+  min-height: 250px;
+  margin-top: 30px;
+  background: rgba(30, 30, 40, 0.92); /* Subtle glassy effect */
+  border-radius: 22px;
+  border: 2px solid #ff2a00;
+  box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.25);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  transition: box-shadow 0.3s, transform 0.3s;
+}
+
+.card.upload-card:hover {
+  box-shadow: 0 12px 40px 0 rgba(221,36,118,0.25), 0 1.5px 8px 0 rgba(31, 38, 135, 0.10);
+  transform: translateY(-4px) scale(1.015);
+  border-color: #dd2476;
+}
+
+.btn-modern {
+  background: #ff512f;
+  color: #fff !important;
+  border: none;
+  border-radius: 30px;
+  font-weight: 600;
+  box-shadow: 0 4px 14px 0 rgba(221,36,118,0.15);
+  transition: background 0.3s, box-shadow 0.3s;
+}
+.btn-modern:hover, .btn-modern:focus {
+  background: linear-gradient(90deg, #dd2476, #ff512f);
+  color: #ffffff !important;
+  box-shadow: 0 6px 20px 0 rgba(221,36,118,0.25);
+}
+
+.card {
+  border-radius: 18px;
+  border: none;
+}
+
+.navbar {
+  min-height: 40px;         /* Increase the minimum height */
+  padding-top: 0.65rem;        /* Add more padding if needed */
+  padding-bottom: 0.65rem;
+  background: rgb(0, 0, 0) !important;
+  border-bottom: 2px solid #ff0019;
+}
+
+.navbar, .navbar .nav-link, .navbar {
+  font-size: 1.15rem; /* Adjust the value as needed */
+  color: #c9c9c9;
+}
+
+.navbar-brand{
+  font-weight: 700;
+  font-size: 1.65rem;
 }
