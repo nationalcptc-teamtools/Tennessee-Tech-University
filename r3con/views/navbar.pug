@@ -13,15 +13,13 @@ nav.navbar.navbar-expand-lg.navbar-dark.bg-dark
     #navbarNav.collapse.navbar-collapse
       ul.navbar-nav.me-auto
         li.nav-item
-          a.nav-link(href='/' class=currentPage === '' ? 'active' : '') Graph
         li.nav-item
           a.nav-link(href='/hosts' class=currentPage === 'hosts' ? 'active' : '') Hosts
         li.nav-item
-          a.nav-link(href='/services' class=currentPage === 'services' ? 'active' : '') Services
         li.nav-item
           a.nav-link(href='/credentials' class=currentPage === 'credentials' ? 'active' : '') Credentials
         li.nav-item
-          a.nav-link(id='files') Files
+          a.nav-link(href='/files' class=currentPage === 'files' ? 'active' : '') Files
       ul.navbar-nav
         li.nav-item
           a.nav-link(href='/export_db')

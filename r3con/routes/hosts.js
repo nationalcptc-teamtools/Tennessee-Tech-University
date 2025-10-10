@@ -68,26 +68,58 @@ router.get('/', function(req, res, next) {
       host.services = db.prepare('SELECT * FROM SERVICES WHERE host_id = ?').all(host.id);
       if (host.services === null) {
         host.services = [];
-        continue;
+      } else {
+        host.services = host.services.map(service => { return { name: service.name, port: service.port, protocol: service.protocol, version: service.version } });
       }
-      host.services = host.services.map(service => { return { name: service.name, port: service.port, protocol: service.protocol, version: service.version } });
 
       // Get tags for host
       host.tags = db.prepare('SELECT * FROM TAGS WHERE host_id = ?').all(host.id);
       if (host.tags === null) {
         host.tags = [];
-        continue;
+      } else {
+        host.tags = host.tags.map(tag => tag.tag);
       }
-      host.tags = host.tags.map(tag => tag.tag);
     }
 
-    console.log(hosts);
+    // Auto-delete hosts with no services/ports
+    const hostsToDelete = hosts.filter(host => !host.services || host.services.length === 0);
+    for (const host of hostsToDelete) {
+      // Delete related data first (foreign key constraints)
+      db.prepare('DELETE FROM TAGS WHERE host_id = ?').run(host.id);
+      db.prepare('DELETE FROM SCRIPTS WHERE host_id = ?').run(host.id);
+      db.prepare('DELETE FROM CREDENTIALS WHERE host_id = ?').run(host.id);
+      db.prepare('DELETE FROM HOSTS WHERE id = ?').run(host.id);
+    }
 
-    const totalHostCount = hosts.length;
-    const compromisedHostCount = hosts.filter(host => host.tags.includes('compromised') && !host.tags.includes('pwned')).length;
-    const pwnedHostCount = hosts.filter(host => host.tags.includes('pwned')).length;
+    // Re-fetch hosts after deletion
+    const remainingHosts = db.prepare('SELECT * FROM HOSTS').all();
 
-    return res.render('hosts', { hosts: hosts, totalHostCount: totalHostCount, compromisedHostCount: compromisedHostCount, pwnedHostCount: pwnedHostCount });
+    for (const host of remainingHosts) {
+      // Get services for host
+      host.services = db.prepare('SELECT * FROM SERVICES WHERE host_id = ?').all(host.id);
+      if (host.services === null) {
+        host.services = [];
+      } else {
+        host.services = host.services.map(service => { return { name: service.name, port: service.port, protocol: service.protocol, version: service.version } });
+      }
+
+      // Get tags for host
+      host.tags = db.prepare('SELECT * FROM TAGS WHERE host_id = ?').all(host.id);
+      if (host.tags === null) {
+        host.tags = [];
+      } else {
+        host.tags = host.tags.map(tag => tag.tag);
+      }
+    }
+
+    console.log(remainingHosts);
+
+    const totalHostCount = remainingHosts.length;
+    const ownedHostCount = remainingHosts.filter(host => host.tags.includes('owned')).length;
+    const compromisedHostCount = remainingHosts.filter(host => host.tags.includes('compromised') && !host.tags.includes('pwned')).length;
+    const pwnedHostCount = remainingHosts.filter(host => host.tags.includes('pwned')).length;
+
+    return res.render('hosts', { hosts: remainingHosts, totalHostCount: totalHostCount, ownedHostCount: ownedHostCount, compromisedHostCount: compromisedHostCount, pwnedHostCount: pwnedHostCount });
   }
 
   // If filters, return filtered hosts
@@ -156,10 +188,11 @@ router.get('/', function(req, res, next) {
   console.log(filteredHosts);
 
   const totalHostCount = filteredHosts.length;
+  const ownedHostCount = filteredHosts.filter(host => host.tags.includes('owned')).length;
   const compromisedHostCount = filteredHosts.filter(host => host.tags.includes('compromised') && !host.tags.includes('pwned')).length;
   const pwnedHostCount = filteredHosts.filter(host => host.tags.includes('pwned')).length;
 
-  return res.render('hosts', { hosts: filteredHosts, totalHostCount: totalHostCount, compromisedHostCount: compromisedHostCount, pwnedHostCount: pwnedHostCount });
+  return res.render('hosts', { hosts: filteredHosts, totalHostCount: totalHostCount, ownedHostCount: ownedHostCount, compromisedHostCount: compromisedHostCount, pwnedHostCount: pwnedHostCount });
 
 });
 
@@ -305,6 +338,41 @@ router.delete('/:id/tag', function(req, res, next) {
   }
 
   db.prepare('DELETE FROM TAGS WHERE tag = ? AND host_id = ?').run(tag, id);
+  return res.json({ success: true });
+});
+
+// Delete individual host
+router.delete('/:id', function(req, res, next) {
+  const id = req.params.id;
+
+  if (!id) {
+    return res.status(400).json({ error: 'No id provided' });
+  }
+
+  const host = db.prepare('SELECT * FROM HOSTS WHERE id = ?').get(id);
+  if (!host) {
+    return res.status(404).json({ error: 'Host not found' });
+  }
+
+  // Delete related data first (foreign key constraints)
+  db.prepare('DELETE FROM TAGS WHERE host_id = ?').run(id);
+  db.prepare('DELETE FROM SCRIPTS WHERE host_id = ?').run(id);
+  db.prepare('DELETE FROM CREDENTIALS WHERE host_id = ?').run(id);
+  db.prepare('DELETE FROM SERVICES WHERE host_id = ?').run(id);
+  db.prepare('DELETE FROM HOSTS WHERE id = ?').run(id);
+
+  return res.json({ success: true });
+});
+
+// Delete all hosts
+router.delete('/', function(req, res, next) {
+  // Delete all related data first (foreign key constraints)
+  db.prepare('DELETE FROM TAGS').run();
+  db.prepare('DELETE FROM SCRIPTS').run();
+  db.prepare('DELETE FROM CREDENTIALS').run();
+  db.prepare('DELETE FROM SERVICES').run();
+  db.prepare('DELETE FROM HOSTS').run();
+
   return res.json({ success: true });
 });
 
